@@ -47,12 +47,6 @@ class NotificationServiceTest {
     void setUp() {
         ReflectionTestUtils.setField(notificationService, "alertThresholdPercent", 80);
 
-        doAnswer(invocation -> {
-            Runnable action = invocation.getArgument(2);
-            action.run();
-            return null;
-        }).when(processedEventService).processIdempotently(anyString(), anyString(), any(Runnable.class));
-
         budgetExceededEvent = BudgetExceededEvent.builder()
                 .eventId("evt-budget-exceeded-1")
                 .userId(1L)
@@ -75,6 +69,7 @@ class NotificationServiceTest {
 
     @Test
     void handleBudgetExceeded_createsNotificationWithFormattedMessage() {
+        executeIdempotentAction();
         when(notificationRepository.save(any(Notification.class))).thenAnswer(invocation -> {
             Notification saved = invocation.getArgument(0);
             saved.setId(1L);
@@ -97,6 +92,7 @@ class NotificationServiceTest {
 
     @Test
     void handleBudgetExceeded_doesNothingWhenEventIsIncomplete() {
+        executeIdempotentAction();
         BudgetExceededEvent incompleteEvent = BudgetExceededEvent.builder()
                 .userId(1L)
                 .category("Food")
@@ -156,5 +152,13 @@ class NotificationServiceTest {
         assertThatThrownBy(() -> notificationService.deleteNotification(1L, 1L))
                 .isInstanceOf(NotificationNotFoundException.class)
                 .hasMessage("Notification not found");
+    }
+
+    private void executeIdempotentAction() {
+        doAnswer(invocation -> {
+            Runnable action = invocation.getArgument(2);
+            action.run();
+            return null;
+        }).when(processedEventService).processIdempotently(anyString(), anyString(), any(Runnable.class));
     }
 }
