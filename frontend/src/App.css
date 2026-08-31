@@ -1,0 +1,481 @@
+/* ==========================================================================
+   Legacy application stylesheet.
+
+   `src/index.css` is the authoritative token foundation. This file is retained
+   for two reasons only:
+     1. the `--color-*` / `--space-*` / `--text-*` aliases that the legacy rules
+        below still read. They now map onto index.css tokens, so they follow the
+        light/dark theme automatically and can no longer drift;
+     2. a handful of live classes that active components depend on
+        (`.app`, `.loading-container`, `.iso-icon*`, `.primary-action`).
+
+   CASCADE NOTE — read before editing.
+   Tailwind v3's `@layer base/components/utilities` are *Tailwind* directives,
+   not CSS cascade layers: they are stripped during compilation, so the emitted
+   stylesheet is entirely unlayered. This file must therefore stay unlayered
+   too. Wrapping it in `@layer base` is a hard build error
+   ("`@layer base` is used but no matching `@tailwind base` directive").
+
+   Because everything is unlayered, precedence is decided by specificity first
+   and source order second. `main.jsx` imports `index.css` before `App.jsx`
+   imports this file, so this file is later in the bundle and wins ties.
+   Consequences:
+     - element selectors here (`h1`, `button`, `input`) score 0,0,1 and always
+       lose to a Tailwind utility (0,1,0). They only style elements that do not
+       carry the competing utility, so they are safe and are kept verbatim.
+     - a *class* selector here ties with a utility and would win. Only four such
+       conflicts existed, and each is resolved below.
+
+   RESOLVED CONFLICTS
+     1. duplicate `--radius-*` block removed — radii now come from index.css
+        alone, otherwise this file's 4/8/12/16px silently replaced the design
+        system's 8/10/14/16px.
+     2. `--font-family-base` / `--font-family-mono` now delegate to the
+        index.css stacks, so `body` cannot override the design system font.
+     3. `.app-shell, .app-shell *` font-family removed — a universal selector
+        inside the shell tied with and defeated `font-mono` on tabular figures.
+        `body` already supplies the stack by inheritance.
+     4. `.primary-action` re-pointed at `--accent-solid` so it agrees with the
+        `bg-accent-solid` utility it is paired with instead of fighting it.
+   ========================================================================== */
+
+:root {
+  /* Primary Colors */
+  --color-primary: rgb(var(--accent-primary));
+  --color-primary-dark: rgb(var(--accent-primary-hover));
+  --color-primary-light: rgb(var(--accent-primary) / 0.16);
+
+  /* Secondary Colors */
+  --color-secondary: rgb(var(--accent-secondary));
+  --color-secondary-dark: rgb(var(--accent-secondary));
+  --color-secondary-light: rgb(var(--accent-secondary) / 0.16);
+
+  /* Neutral Colors */
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+
+  /* Semantic Colors */
+  --color-success: rgb(var(--status-success));
+  --color-warning: rgb(var(--status-warning));
+  --color-error: rgb(var(--status-error));
+  --color-info: rgb(var(--status-info));
+
+  /* Background Colors */
+  --color-bg-primary: rgb(var(--bg-surface));
+  --color-bg-secondary: rgb(var(--bg-canvas));
+  --color-bg-tertiary: rgb(var(--bg-muted));
+
+  /* Border Colors */
+  --color-border: rgb(var(--border-subtle));
+  --color-border-light: rgb(var(--border-subtle));
+
+  /* Text Colors */
+  --color-text-primary: rgb(var(--text-primary));
+  --color-text-secondary: rgb(var(--text-secondary));
+  --color-text-tertiary: rgb(var(--text-muted));
+
+  /* Spacing Scale (8px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* Typography — delegated to the index.css stacks so there is a single
+     source of truth for the font. */
+  --font-family-base: var(--font-sans);
+  --font-family-mono: var(--font-mono);
+
+  /* Font Sizes */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+}
+
+/* Reset & Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* App Container */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Loading Container */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  color: var(--color-text-secondary);
+}
+
+/* Typography */
+h1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-4);
+  line-height: var(--leading-tight);
+}
+
+h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-3);
+  line-height: var(--leading-tight);
+}
+
+h3 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+  line-height: var(--leading-tight);
+}
+
+p {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+/* Form Elements */
+input,
+textarea,
+select {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-family: var(--font-family-base);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: var(--color-bg-primary);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(var(--accent-primary) / 0.15);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* Buttons */
+button {
+  padding: var(--space-3) var(--space-6);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: var(--font-family-base);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background-color: var(--color-primary);
+  color: rgb(var(--text-on-accent));
+}
+
+button.primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+/* Retained for `Dashboard.jsx`, which pairs this class with the matching
+   `bg-accent-solid` utility. Re-pointed at the same token so the class and the
+   utility now agree rather than fight. */
+button.primary-action,
+.primary-action {
+  background-color: rgb(var(--accent-solid));
+  color: rgb(var(--text-on-accent));
+}
+
+button.primary-action:hover,
+.primary-action:hover {
+  background-color: rgb(var(--accent-solid-hover));
+  color: rgb(var(--text-on-accent));
+}
+
+button.secondary {
+  background-color: var(--color-gray-100);
+  color: var(--color-text-primary);
+}
+
+button.secondary:hover {
+  background-color: var(--color-gray-200);
+}
+
+/* --------------------------------------------------------------------------
+   Legacy component styles. `Navbar.jsx`, `Card.jsx`, `BudgetCard.jsx`,
+   `ExpenseForm.jsx` and `NotificationItem.jsx` are currently imported by
+   nothing, so these selectors match no rendered element. They are kept
+   verbatim rather than deleted: those components still reference them, and as
+   class selectors scoped to dead markup they cannot conflict with anything.
+   -------------------------------------------------------------------------- */
+.navbar {
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-4) var(--space-8);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.navbar-brand a {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.navbar-brand a:hover {
+  color: var(--color-primary-dark);
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+.navbar-links a {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-weight: var(--font-medium);
+  transition: color 0.2s ease;
+  font-size: var(--text-sm);
+}
+
+.navbar-links a:hover {
+  color: var(--color-primary);
+}
+
+.logout-btn {
+  background-color: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-weight: var(--font-medium);
+  transition: all 0.2s ease;
+  font-size: var(--text-sm);
+}
+
+.logout-btn:hover {
+  background-color: var(--color-gray-100);
+  color: var(--color-text-primary);
+}
+
+.main-content {
+  flex: 1;
+  padding: var(--space-8);
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.card {
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.notification-item {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-3);
+  transition: all 0.2s ease;
+}
+
+.notification-item.unread {
+  background-color: rgb(var(--accent-primary) / 0.08);
+  border-left: 3px solid var(--color-primary);
+}
+
+.notification-item.read {
+  opacity: 0.7;
+}
+
+.notification-date {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-2);
+}
+
+.budget-card {
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.budget-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.budget-card h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-2);
+}
+
+.expense-form {
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.expense-form h2 {
+  margin-bottom: var(--space-6);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .navbar {
+    padding: var(--space-4);
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .navbar-links {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-4);
+  }
+
+  .main-content {
+    padding: var(--space-4);
+  }
+
+  h1 {
+    font-size: var(--text-2xl);
+  }
+
+  h2 {
+    font-size: var(--text-xl);
+  }
+
+  h3 {
+    font-size: var(--text-lg);
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-links {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .navbar-links a,
+  .logout-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* Pseudo-isometric Icons — used by the category badges on Expenses, Budgets
+   and Dashboard. */
+.iso-icon-container {
+  perspective: 100px;
+  transform-style: preserve-3d;
+}
+
+.iso-icon {
+  transform: rotateX(15deg) rotateY(-15deg) rotateZ(5deg);
+  filter: drop-shadow(1px 2px 1.5px rgba(0, 0, 0, 0.45));
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s ease;
+}
+
+.iso-icon-container:hover .iso-icon {
+  transform: scale(1.1) rotateX(12deg) rotateY(-12deg) rotateZ(8deg);
+  filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.55));
+}
+
+/* Shared chrome heading reset. The former `.app-shell, .app-shell *`
+   font-family declaration was removed — see conflict 3 in the header note. */
+.app-shell aside h1,
+.app-shell aside h2,
+.app-shell aside h3,
+.app-shell aside p,
+.app-shell header h1,
+.app-shell header h2,
+.app-shell header h3,
+.app-shell header p {
+  margin: 0;
+}

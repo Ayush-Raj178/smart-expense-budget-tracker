@@ -1,0 +1,62 @@
+server:
+  port: 8082
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: expense-service
+  http:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3307}/sebt_expense_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: true
+        spring.json.type.mapping: expenseAdded:com.smartexpense.expenseservice.event.ExpenseAddedEvent,expenseUpdated:com.smartexpense.expenseservice.event.ExpenseUpdatedEvent,expenseDeleted:com.smartexpense.expenseservice.event.ExpenseDeletedEvent
+
+jwt:
+  secret: ${JWT_SECRET}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  kafka:
+    expense-topic: ${KAFKA_EXPENSE_TOPIC:expense-events}
+  admin:
+    republish-events-enabled: ${ADMIN_REPUBLISH_EVENTS_ENABLED:false}
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:2000}
+    batch-size: ${OUTBOX_BATCH_SIZE:50}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:5}
+    publish-timeout-ms: ${OUTBOX_PUBLISH_TIMEOUT_MS:10000}
+    claim-lease-ms: ${OUTBOX_CLAIM_LEASE_MS:30000}
+    initial-backoff-ms: ${OUTBOX_INITIAL_BACKOFF_MS:1000}
+    max-backoff-ms: ${OUTBOX_MAX_BACKOFF_MS:60000}

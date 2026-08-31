@@ -1,0 +1,199 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   SmartBudget — authoritative design-token foundation.
+
+   Every visual value in the app resolves from the custom properties below.
+   `tailwind.config.js` bridges them to semantic utilities, so restyling is a
+   token edit, not a JSX edit.
+
+   Contract: token NAMES are load-bearing (JSX reads several of them directly
+   via `color="var(--*-hex)"` and `style={{ ... }}`). Names must not be
+   renamed or removed — only their values change per theme.
+   ========================================================================== */
+
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* ---- Typography: system-first, zero network font dependencies --------
+       Segoe UI Variable (Win11) and -apple-system (macOS) are high-quality
+       variable faces already on the user's machine. Display vs Text picks the
+       correct optical size where the OS exposes one.                       */
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Text', 'Segoe UI', system-ui, 'Helvetica Neue', Helvetica, Arial, 'Noto Sans', sans-serif;
+    --font-display: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable Display', 'Segoe UI', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, 'Cascadia Mono', 'Cascadia Code', 'Segoe UI Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+    /* ---- Elevation 0-3 -------------------------------------------------
+       0 canvas · 1 surface (cards) · 2 hover/muted (interactive, recessed)
+       3 elevated (dropdowns, modals, floating). Light mode separates layers
+       with a tinted canvas + white cards + a real border, not shadow alone. */
+    --bg-canvas: 239 243 249;
+    --bg-surface: 255 255 255;
+    --bg-elevated: 255 255 255;
+    --bg-muted: 232 238 247;
+    --bg-hover: 226 234 244;
+    --border-subtle: 214 224 236;
+    --border-strong: 188 201 221;
+
+    /* ---- Text ---------------------------------------------------------- */
+    --text-primary: 16 24 40;
+    --text-secondary: 71 84 103;
+    --text-muted: 88 101 118;
+    --text-on-accent: 255 255 255;
+
+    /* ---- Accent --------------------------------------------------------
+       `accent-primary` doubles as body-copy link colour, so it carries the
+       4.5:1 burden; `accent-solid` is a fill only, so it can run brighter. */
+    --accent-primary: 5 107 141;
+    --accent-primary-hover: 3 78 102;
+    --accent-solid: 8 126 164;
+    --accent-solid-hover: 5 107 141;
+    --accent-secondary: 46 95 217;
+
+    /* ---- Icon colours read directly by JSX `color=` props --------------- */
+    --accent-primary-hex: #056b8d;
+    --icon-badge-foreground-hex: #586576;
+    --primary-icon-hex: #ffffff;
+    --muted-icon-hex: #586576;
+    --success-icon-hex: #04674f;
+    --warning-icon-hex: #8f5e0c;
+    --error-icon-hex: #c02f48;
+
+    /* ---- Status -------------------------------------------------------- */
+    --status-success: 4 103 79;
+    --status-warning: 143 94 12;
+    --status-error: 192 47 72;
+    --status-info: 10 110 158;
+
+    /* ---- Charts: deliberately aligned to the status hue each category
+            already uses for its badge tint, so donut and badge agree.     */
+    --chart-entertainment: #0a6e9e;
+    --chart-transport: #2e5fd9;
+    --chart-food: #04674f;
+    --chart-shopping: #c02f48;
+    --chart-bills: #8f5e0c;
+    --chart-other: #5b6e8c;
+
+    /* ---- Radius: small 8 · control 10 · card 14 · panel 16 · pill ------- */
+    --radius-sm: 8px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 16px;
+    --radius-pill: 9999px;
+
+    /* ---- Shadow: cool navy tint, never neutral black ------------------- */
+    --shadow-sm: 0 1px 2px rgb(16 33 66 / 0.06), 0 1px 1px rgb(16 33 66 / 0.05);
+    --shadow-md: 0 2px 4px rgb(16 33 66 / 0.07), 0 7px 18px -3px rgb(16 33 66 / 0.12);
+    --shadow-lg: 0 2px 5px rgb(16 33 66 / 0.08), 0 14px 30px -5px rgb(16 33 66 / 0.16);
+    --shadow-xl: 0 4px 10px rgb(16 33 66 / 0.10), 0 30px 60px -10px rgb(16 33 66 / 0.23);
+    --shadow-control: inset 0 1px 2px rgb(16 33 66 / 0.05);
+
+    /* ---- Motion -------------------------------------------------------- */
+    --motion-instant: 80ms;
+    --motion-fast: 120ms;
+    --motion-base: 180ms;
+    --motion-slow: 260ms;
+    --ease-standard: cubic-bezier(.2, 0, 0, 1);
+    --ease-exit: cubic-bezier(.4, 0, 1, 1);
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    /* Layered midnight navy. Canvas is the deepest value but never pure
+       black; muted sits *below* surface to read as a recessed well.        */
+    --bg-canvas: 7 17 31;
+    --bg-surface: 15 29 49;
+    --bg-elevated: 19 35 58;
+    --bg-muted: 10 22 40;
+    --bg-hover: 23 42 69;
+    --border-subtle: 32 48 70;
+    --border-strong: 48 66 92;
+
+    --text-primary: 244 248 255;
+    --text-secondary: 183 197 217;
+    --text-muted: 131 147 170;
+
+    /* The flip that fixes white-on-cyan: on a bright accent fill the
+       foreground becomes deep navy ink, not white. */
+    --text-on-accent: 7 17 31;
+
+    --accent-primary: 34 199 232;
+    --accent-primary-hover: 82 211 240;
+    --accent-solid: 20 184 216;
+    --accent-solid-hover: 56 192 222;
+    --accent-secondary: 106 145 255;
+
+    --accent-primary-hex: #22c7e8;
+    --icon-badge-foreground-hex: #8393aa;
+    --primary-icon-hex: #07111f;
+    --muted-icon-hex: #8393aa;
+    --success-icon-hex: #2dd4a7;
+    --warning-icon-hex: #f6b84a;
+    --error-icon-hex: #f06474;
+
+    --status-success: 45 212 167;
+    --status-warning: 246 184 74;
+    --status-error: 240 100 116;
+    --status-info: 92 200 224;
+
+    --chart-entertainment: #5cc8e0;
+    --chart-transport: #6a91ff;
+    --chart-food: #2dd4a7;
+    --chart-shopping: #f06474;
+    --chart-bills: #f6b84a;
+    --chart-other: #93a7c4;
+
+    --shadow-sm: 0 1px 2px rgb(2 6 14 / 0.4);
+    --shadow-md: 0 2px 4px rgb(2 6 14 / 0.36), 0 6px 16px -2px rgb(2 6 14 / 0.44);
+    --shadow-lg: 0 2px 4px rgb(2 6 14 / 0.4), 0 12px 28px -4px rgb(2 6 14 / 0.55);
+    --shadow-xl: 0 4px 8px rgb(2 6 14 / 0.45), 0 28px 56px -8px rgb(2 6 14 / 0.65);
+    --shadow-control: inset 0 1px 2px rgb(2 6 14 / 0.35);
+  }
+
+  html {
+    background: rgb(var(--bg-canvas));
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    min-width: 320px;
+    background: rgb(var(--bg-canvas));
+    color: rgb(var(--text-primary));
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums lining-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings take the display optical size and tighter tracking; the
+     "expensive" feel comes from spacing and tracking, not a webfont. */
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: rgb(var(--accent-primary) / 0.24);
+    color: rgb(var(--text-primary));
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent-primary));
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}

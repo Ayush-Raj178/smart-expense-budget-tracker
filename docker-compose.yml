@@ -1,0 +1,221 @@
+# Full stack for local development (MySQL + Kafka + 4 microservices).
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose ps
+#
+# All services run inside Docker network. Ports exposed to host for testing.
+# MySQL is mapped to host port 3307 (container still listens on 3306) to avoid
+# conflicting with a local MySQL install on 3306.
+# Kafka (Confluent cp-kafka) uses dual listeners: internal (kafka:9092) for Docker network,
+# external (localhost:29092) for host access.
+#
+# Connect from host machine:
+#   user-service:    http://localhost:8081
+#   expense-service: http://localhost:8082
+#   budget-service:  http://localhost:8083
+#   notification-service: http://localhost:8084
+#   Kafka (external): localhost:29092
+#
+# Verify databases:
+#   docker exec -it sebt-mysql mysql -uroot -p -e "SHOW DATABASES LIKE 'sebt_%';"
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: sebt-mysql
+    restart: unless-stopped
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - sebt-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: sebt-kafka
+    restart: unless-stopped
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: sebt-kafka-cluster-0001
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - sebt-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  user-service:
+    build:
+      context: ./backend/user-service
+      dockerfile: Dockerfile
+    container_name: sebt-user-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_EXPIRATION_MS: 86400000
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      OTP_EXPIRY_MINUTES: ${OTP_EXPIRY_MINUTES:-10}
+      OTP_RESEND_COOLDOWN_SECONDS: ${OTP_RESEND_COOLDOWN_SECONDS:-60}
+      OTP_MAX_ATTEMPTS: ${OTP_MAX_ATTEMPTS:-5}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sebt-network
+
+  expense-service:
+    build:
+      context: ./backend/expense-service
+      dockerfile: Dockerfile
+    container_name: sebt-expense-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_EXPENSE_TOPIC: expense-events
+      ADMIN_REPUBLISH_EVENTS_ENABLED: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sebt-network
+
+  budget-service:
+    build:
+      context: ./backend/budget-service
+      dockerfile: Dockerfile
+    container_name: sebt-budget-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_EXPENSE_TOPIC: expense-events
+      KAFKA_BUDGET_EXCEEDED_TOPIC: budget-exceeded
+      KAFKA_CONSUMER_GROUP: budget-service-group
+      BUDGET_ALERT_THRESHOLD: 80
+      EXPENSE_SERVICE_URL: http://expense-service:8082
+      EXPENSE_SERVICE_CONNECT_TIMEOUT_MS: 500
+      EXPENSE_SERVICE_READ_TIMEOUT_MS: 1000
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sebt-network
+
+  notification-service:
+    build:
+      context: ./backend/notification-service
+      dockerfile: Dockerfile
+    container_name: sebt-notification-service
+    restart: unless-stopped
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_BUDGET_EXCEEDED_TOPIC: budget-exceeded
+      KAFKA_CONSUMER_GROUP: notification-service-group
+      BUDGET_ALERT_THRESHOLD: 80
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - sebt-network
+
+volumes:
+  mysql_data:
+    name: sebt_mysql_data
+  kafka_data:
+    name: sebt_kafka_data
+
+networks:
+  sebt-network:
+    name: sebt-network
+    driver: bridge
