@@ -1,10 +1,14 @@
 import api from '@/utils/axios';
-
-const API_BASE_URL = '/api';
+import { USER_API_BASE_URL } from '@/config/api';
 
 export const authService = {
+  async getFeatureFlags() {
+    const response = await api.get(`${USER_API_BASE_URL}/public/config`);
+    return response.data;
+  },
+
   async signup(name, email, password) {
-    const response = await api.post(`${API_BASE_URL}/auth/signup`, {
+    const response = await api.post(`${USER_API_BASE_URL}/auth/signup`, {
       name,
       email,
       password,
@@ -13,22 +17,22 @@ export const authService = {
   },
 
   async verifySignupOtp(email, otp) {
-    const response = await api.post(`${API_BASE_URL}/auth/signup/verify`, { email, otp });
+    const response = await api.post(`${USER_API_BASE_URL}/auth/signup/verify`, { email, otp });
     return response.data;
   },
 
   async resendSignupOtp(email) {
-    const response = await api.post(`${API_BASE_URL}/auth/signup/resend`, { email });
+    const response = await api.post(`${USER_API_BASE_URL}/auth/signup/resend`, { email });
     return response.data;
   },
 
   async forgotPassword(email) {
-    const response = await api.post(`${API_BASE_URL}/auth/forgot-password`, { email });
+    const response = await api.post(`${USER_API_BASE_URL}/auth/forgot-password`, { email });
     return response.data;
   },
 
   async verifyPasswordResetOtp(email, otp) {
-    const response = await api.post(`${API_BASE_URL}/auth/forgot-password/verify`, {
+    const response = await api.post(`${USER_API_BASE_URL}/auth/forgot-password/verify`, {
       email,
       otp,
     });
@@ -36,7 +40,7 @@ export const authService = {
   },
 
   async resetPassword(email, otp, newPassword) {
-    const response = await api.post(`${API_BASE_URL}/auth/reset-password`, {
+    const response = await api.post(`${USER_API_BASE_URL}/auth/reset-password`, {
       email,
       otp,
       newPassword,
@@ -45,7 +49,7 @@ export const authService = {
   },
 
   async login(email, password) {
-    const response = await api.post(`${API_BASE_URL}/auth/login`, {
+    const response = await api.post(`${USER_API_BASE_URL}/auth/login`, {
       email,
       password,
     });
@@ -53,7 +57,7 @@ export const authService = {
   },
 
   async getCurrentUser(token) {
-    const response = await api.get(`${API_BASE_URL}/users/me`, {
+    const response = await api.get(`${USER_API_BASE_URL}/users/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -62,17 +66,17 @@ export const authService = {
   },
 
   async updateProfile({ name, phoneNumber }) {
-    const response = await api.put(`${API_BASE_URL}/users/me`, { name, phoneNumber });
+    const response = await api.put(`${USER_API_BASE_URL}/users/me`, { name, phoneNumber });
     return response.data;
   },
 
   async requestEmailChange(newEmail) {
-    const response = await api.post(`${API_BASE_URL}/users/me/email/request`, { newEmail });
+    const response = await api.post(`${USER_API_BASE_URL}/users/me/email/request`, { newEmail });
     return response.data;
   },
 
   async verifyEmailChange(newEmail, otp) {
-    const response = await api.post(`${API_BASE_URL}/users/me/email/verify`, { newEmail, otp });
+    const response = await api.post(`${USER_API_BASE_URL}/users/me/email/verify`, { newEmail, otp });
     return response.data;
   },
 };

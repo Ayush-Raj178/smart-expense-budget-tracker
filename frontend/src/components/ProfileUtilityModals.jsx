@@ -4,6 +4,7 @@ import { BookOpenText, CheckCircle2, Info, KeyRound, LifeBuoy, Mail, MessageCirc
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
+import { useFeatureFlags } from '@/context/FeatureFlagsContext';
 import { authService } from '@/services/authService';
 
 const dialogMotion = {
@@ -24,6 +25,7 @@ const FieldLabel = ({ htmlFor, children, hint }) => (
 
 const ProfileUtilityModals = ({ activePanel, onClose, user }) => {
   const { login, updateUser } = useAuth();
+  const { otpVerificationEnabled, loading: featureFlagsLoading } = useFeatureFlags();
   const [draft, setDraft] = useState({ name: '', email: '', phone: '' });
   const [phase, setPhase] = useState('details');
   const [otp, setOtp] = useState('');
@@ -55,7 +57,8 @@ const ProfileUtilityModals = ({ activePanel, onClose, user }) => {
     setStatus('');
     setLoading(true);
     const newEmail = draft.email.trim().toLowerCase();
-    const emailChanged = newEmail !== (user?.email || '').trim().toLowerCase();
+    const emailChanged = otpVerificationEnabled && !featureFlagsLoading
+      && newEmail !== (user?.email || '').trim().toLowerCase();
     let profileSaved = false;
     try {
       const updated = await authService.updateProfile({ name: draft.name, phoneNumber: draft.phone.trim() || null });
@@ -145,7 +148,7 @@ const ProfileUtilityModals = ({ activePanel, onClose, user }) => {
                   <div className="space-y-4 rounded-xl border border-border-subtle bg-surface/70 p-4">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Identity</p>
                     <div><FieldLabel htmlFor="profile-name">Name</FieldLabel><div className="relative"><UserRoundPen className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2" color="var(--muted-icon-hex)" /><Input id="profile-name" value={draft.name} onChange={(event) => setDraft(current => ({ ...current, name: event.target.value }))} autoComplete="name" className="h-11 bg-canvas pl-10 font-medium" required maxLength={100} /></div></div>
-                    <div><FieldLabel htmlFor="profile-email" hint="Verified change">Email</FieldLabel><div className="relative"><Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2" color="var(--muted-icon-hex)" /><Input id="profile-email" type="email" value={draft.email} onChange={(event) => setDraft(current => ({ ...current, email: event.target.value }))} autoComplete="email" className="h-11 bg-canvas pl-10 font-medium" required maxLength={254} /></div><p className="mt-1.5 text-xs leading-5 text-text-muted">A change is applied only after you verify a code sent to the new address.</p></div>
+                    <div><FieldLabel htmlFor="profile-email" hint={otpVerificationEnabled && !featureFlagsLoading ? 'Verified change' : 'Demo mode'}>Email</FieldLabel><div className="relative"><Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2" color="var(--muted-icon-hex)" /><Input id="profile-email" type="email" value={draft.email} onChange={(event) => setDraft(current => ({ ...current, email: event.target.value }))} autoComplete="email" className="h-11 bg-canvas pl-10 font-medium" required maxLength={254} disabled={!otpVerificationEnabled || featureFlagsLoading} /></div><p className="mt-1.5 text-xs leading-5 text-text-muted">{otpVerificationEnabled && !featureFlagsLoading ? 'A change is applied only after you verify a code sent to the new address.' : featureFlagsLoading ? 'Checking whether email verification is available.' : 'Email changes are currently unavailable in this demo deployment. Contact the app owner if you need help.'}</p></div>
                     <div><FieldLabel htmlFor="profile-phone" hint="Optional">Phone number</FieldLabel><div className="relative"><Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 shrink-0 -translate-y-1/2" color="var(--muted-icon-hex)" /><Input id="profile-phone" type="tel" value={draft.phone} onChange={(event) => setDraft(current => ({ ...current, phone: event.target.value }))} autoComplete="tel" placeholder="Add a phone number" className="h-11 bg-canvas pl-10 font-medium" maxLength={30} /></div><p className="mt-1.5 text-xs leading-5 text-text-muted">Phone changes save directly. SMS verification is not available yet.</p></div>
                   </div>
                   {status ? <p role="status" className="relative flex gap-2.5 overflow-hidden rounded-xl border border-success/25 bg-success/[0.08] px-4 py-3 text-xs leading-5 text-text-secondary"><span aria-hidden="true" className="absolute inset-y-0 left-0 w-0.5 bg-success/70" /><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" color="var(--success-icon-hex)" strokeWidth={2} />{status}</p> : null}

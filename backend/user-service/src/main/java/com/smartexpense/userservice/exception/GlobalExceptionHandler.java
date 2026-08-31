@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(OtpVerificationDisabledException.class)
+    public ResponseEntity<MessageResponse> handleOtpVerificationDisabled(OtpVerificationDisabledException ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new MessageResponse(ex.getMessage()));
+    }
+
     @ExceptionHandler(OtpRateLimitException.class)
     public ResponseEntity<MessageResponse> handleOtpRateLimit(OtpRateLimitException ex) {
         HttpHeaders headers = new HttpHeaders();

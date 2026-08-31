@@ -1,5 +1,6 @@
 package com.smartexpense.userservice.service;
 
+import com.smartexpense.userservice.config.OtpVerificationSettings;
 import com.smartexpense.userservice.dto.EmailAddressRequest;
 import com.smartexpense.userservice.dto.EmailChangeRequest;
 import com.smartexpense.userservice.dto.EmailChangeVerificationRequest;
@@ -58,6 +59,7 @@ class AccountVerificationServiceTest {
         service = new AccountVerificationService(
                 userRepository, challengeRepository, passwordEncoder, jwtTokenProvider, emailService,
                 emailDomainValidationService,
+                new OtpVerificationSettings(true),
                 10, 60, 5
         );
     }
@@ -84,6 +86,33 @@ class AccountVerificationServiceTest {
         assertThat(challenge.getPendingName()).isEqualTo("New User");
         assertThat(response.getExpiresInSeconds()).isEqualTo(600);
         verify(userRepository, never()).saveAndFlush(any(User.class));
+    }
+
+    @Test
+    void disabledOtpModeCreatesAnAccountWithoutSendingEmailOrSavingAChallenge() {
+        AccountVerificationService disabledService = new AccountVerificationService(
+                userRepository, challengeRepository, passwordEncoder, jwtTokenProvider, emailService,
+                emailDomainValidationService, new OtpVerificationSettings(false), 10, 60, 5
+        );
+        when(userRepository.existsByEmail("new@example.com")).thenReturn(false);
+        when(passwordEncoder.encode("secret123")).thenReturn("password-hash");
+        when(userRepository.saveAndFlush(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(9L);
+            return user;
+        });
+        when(jwtTokenProvider.generateToken(9L, "new@example.com")).thenReturn("jwt-token");
+
+        LoginResponse response = disabledService.signupWithoutOtp(
+                new SignupRequest(" New User ", "NEW@example.com", "secret123")
+        );
+
+        assertThat(response.getToken()).isEqualTo("jwt-token");
+        assertThat(response.getUser().getEmail()).isEqualTo("new@example.com");
+        assertThat(response.getUser().getName()).isEqualTo("New User");
+        verify(challengeRepository, never()).save(any(EmailOtpChallenge.class));
+        verify(emailService, never()).sendSignupOtp(anyString(), anyString(), anyLong());
+        verify(emailDomainValidationService, never()).requireMailAcceptingDomain(anyString());
     }
 
     @Test

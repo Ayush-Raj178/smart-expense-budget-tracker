@@ -10,6 +10,7 @@ import com.smartexpense.userservice.dto.OtpVerificationRequest;
 import com.smartexpense.userservice.dto.PasswordResetRequest;
 import com.smartexpense.userservice.dto.SignupRequest;
 import com.smartexpense.userservice.dto.UserResponse;
+import com.smartexpense.userservice.config.OtpVerificationSettings;
 import com.smartexpense.userservice.entity.EmailOtpChallenge;
 import com.smartexpense.userservice.entity.OtpPurpose;
 import com.smartexpense.userservice.entity.User;
@@ -18,6 +19,7 @@ import com.smartexpense.userservice.exception.InvalidProfileUpdateException;
 import com.smartexpense.userservice.exception.MailDeliveryException;
 import com.smartexpense.userservice.exception.OtpException;
 import com.smartexpense.userservice.exception.OtpRateLimitException;
+import com.smartexpense.userservice.exception.OtpVerificationDisabledException;
 import com.smartexpense.userservice.exception.UndeliverableEmailDomainException;
 import com.smartexpense.userservice.exception.UserNotFoundException;
 import com.smartexpense.userservice.repository.EmailOtpChallengeRepository;
@@ -43,6 +45,12 @@ public class AccountVerificationService {
     private static final String PASSWORD_RESET_KEY_PREFIX = "password-reset:";
     private static final String PASSWORD_RESET_DISPATCH_MESSAGE =
             "If this email is registered, a code has been sent";
+    public static final String PASSWORD_RESET_UNAVAILABLE_MESSAGE =
+            "Password reset is currently unavailable in this demo deployment. Contact the app owner if you need help.";
+    public static final String EMAIL_CHANGE_UNAVAILABLE_MESSAGE =
+            "Email changes are currently unavailable in this demo deployment. Contact the app owner if you need help.";
+    private static final String SIGNUP_VERIFICATION_UNAVAILABLE_MESSAGE =
+            "Email verification is disabled in this demo deployment.";
     private static final Logger LOGGER = LoggerFactory.getLogger(AccountVerificationService.class);
 
     private final UserRepository userRepository;
@@ -51,6 +59,7 @@ public class AccountVerificationService {
     private final JwtTokenProvider jwtTokenProvider;
     private final EmailService emailService;
     private final EmailDomainValidationService emailDomainValidationService;
+    private final OtpVerificationSettings otpVerificationSettings;
     private final SecureRandom secureRandom = new SecureRandom();
     private final long expiryMinutes;
     private final long resendCooldownSeconds;
@@ -63,6 +72,7 @@ public class AccountVerificationService {
             JwtTokenProvider jwtTokenProvider,
             EmailService emailService,
             EmailDomainValidationService emailDomainValidationService,
+            OtpVerificationSettings otpVerificationSettings,
             @Value("${app.otp.expiry-minutes}") long expiryMinutes,
             @Value("${app.otp.resend-cooldown-seconds}") long resendCooldownSeconds,
             @Value("${app.otp.max-attempts}") int maxAttempts) {
@@ -72,6 +82,7 @@ public class AccountVerificationService {
         this.jwtTokenProvider = jwtTokenProvider;
         this.emailService = emailService;
         this.emailDomainValidationService = emailDomainValidationService;
+        this.otpVerificationSettings = otpVerificationSettings;
         this.expiryMinutes = expiryMinutes;
         this.resendCooldownSeconds = resendCooldownSeconds;
         this.maxAttempts = maxAttempts;
@@ -79,6 +90,7 @@ public class AccountVerificationService {
 
     @Transactional
     public OtpDispatchResponse requestSignupOtp(SignupRequest request) {
+        requireOtpVerificationEnabled(SIGNUP_VERIFICATION_UNAVAILABLE_MESSAGE);
         String email = normalizeEmail(request.getEmail());
         rejectRegisteredEmail(email);
         emailDomainValidationService.requireMailAcceptingDomain(email);
@@ -107,7 +119,27 @@ public class AccountVerificationService {
     }
 
     @Transactional
+    public LoginResponse signupWithoutOtp(SignupRequest request) {
+        String email = normalizeEmail(request.getEmail());
+        rejectRegisteredEmail(email);
+
+        User saved = userRepository.saveAndFlush(User.builder()
+                .name(request.getName().trim())
+                .email(email)
+                .password(passwordEncoder.encode(request.getPassword()))
+                .build());
+
+        String token = jwtTokenProvider.generateToken(saved.getId(), saved.getEmail());
+        return LoginResponse.builder()
+                .message("Account created")
+                .token(token)
+                .user(toUserResponse(saved))
+                .build();
+    }
+
+    @Transactional
     public OtpDispatchResponse resendSignupOtp(EmailAddressRequest request) {
+        requireOtpVerificationEnabled(SIGNUP_VERIFICATION_UNAVAILABLE_MESSAGE);
         String email = normalizeEmail(request.getEmail());
         rejectRegisteredEmail(email);
         String challengeKey = SIGNUP_KEY_PREFIX + email;
@@ -130,6 +162,7 @@ public class AccountVerificationService {
 
     @Transactional(noRollbackFor = OtpException.class)
     public LoginResponse verifySignupOtp(OtpVerificationRequest request) {
+        requireOtpVerificationEnabled(SIGNUP_VERIFICATION_UNAVAILABLE_MESSAGE);
         String email = normalizeEmail(request.getEmail());
         EmailOtpChallenge challenge = challengeRepository.findByChallengeKey(SIGNUP_KEY_PREFIX + email)
                 .orElseThrow(() -> new OtpException("Verification request not found. Start signup again."));
@@ -154,6 +187,7 @@ public class AccountVerificationService {
 
     @Transactional
     public OtpDispatchResponse requestPasswordResetOtp(EmailAddressRequest request) {
+        requireOtpVerificationEnabled(PASSWORD_RESET_UNAVAILABLE_MESSAGE);
         String email = normalizeEmail(request.getEmail());
         OtpDispatchResponse genericResponse = dispatchResponse(email, PASSWORD_RESET_DISPATCH_MESSAGE);
 
@@ -200,6 +234,7 @@ public class AccountVerificationService {
 
     @Transactional(noRollbackFor = OtpException.class)
     public MessageResponse verifyPasswordResetOtp(OtpVerificationRequest request) {
+        requireOtpVerificationEnabled(PASSWORD_RESET_UNAVAILABLE_MESSAGE);
         PasswordResetChallenge passwordReset = findPasswordResetChallenge(request.getEmail());
         verifyChallenge(passwordReset.challenge(), request.getOtp());
         return new MessageResponse("Verification code confirmed");
@@ -207,6 +242,7 @@ public class AccountVerificationService {
 
     @Transactional(noRollbackFor = OtpException.class)
     public MessageResponse resetPassword(PasswordResetRequest request) {
+        requireOtpVerificationEnabled(PASSWORD_RESET_UNAVAILABLE_MESSAGE);
         PasswordResetChallenge passwordReset = findPasswordResetChallenge(request.getEmail());
         verifyChallenge(passwordReset.challenge(), request.getOtp());
         passwordReset.user().setPassword(passwordEncoder.encode(request.getNewPassword()));
@@ -219,6 +255,7 @@ public class AccountVerificationService {
 
     @Transactional
     public OtpDispatchResponse requestEmailChange(Long userId, EmailChangeRequest request) {
+        requireOtpVerificationEnabled(EMAIL_CHANGE_UNAVAILABLE_MESSAGE);
         User user = findUser(userId);
         String newEmail = normalizeEmail(request.getNewEmail());
         if (user.getEmail().equalsIgnoreCase(newEmail)) {
@@ -254,6 +291,7 @@ public class AccountVerificationService {
 
     @Transactional(noRollbackFor = OtpException.class)
     public LoginResponse verifyEmailChange(Long userId, EmailChangeVerificationRequest request) {
+        requireOtpVerificationEnabled(EMAIL_CHANGE_UNAVAILABLE_MESSAGE);
         User user = findUser(userId);
         String newEmail = normalizeEmail(request.getNewEmail());
         EmailOtpChallenge challenge = challengeRepository
@@ -293,6 +331,12 @@ public class AccountVerificationService {
             throw new OtpException(remaining == 0
                     ? "Too many invalid attempts. Request a new code."
                     : "Verification code is incorrect. " + remaining + " attempts remaining.");
+        }
+    }
+
+    private void requireOtpVerificationEnabled(String message) {
+        if (!otpVerificationSettings.isEnabled()) {
+            throw new OtpVerificationDisabledException(message);
         }
     }
 

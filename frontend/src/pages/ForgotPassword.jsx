@@ -6,6 +6,7 @@ import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { authService } from '@/services/authService';
+import { useFeatureFlags } from '@/context/FeatureFlagsContext';
 
 const getApiMessage = (error, fallback) => error.response?.data?.message || fallback;
 const GENERIC_STATUS = 'If this email is registered, a code has been sent.';
@@ -30,6 +31,7 @@ const ForgotPassword = () => {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const navigate = useNavigate();
+  const { otpVerificationEnabled, loading: featureFlagsLoading } = useFeatureFlags();
 
   useEffect(() => {
     if (cooldown <= 0) return undefined;
@@ -152,6 +154,34 @@ const ForgotPassword = () => {
   };
 
   const mutedIconStyle = { color: 'rgb(var(--text-muted))' };
+
+  if (featureFlagsLoading) {
+    return (
+      <AuthShell mode="login">
+        <p className="text-sm text-text-secondary">Checking account recovery options…</p>
+      </AuthShell>
+    );
+  }
+
+  if (!otpVerificationEnabled) {
+    return (
+      <AuthShell mode="login">
+        <motion.div {...panelMotion}>
+          <Link to="/login" className="mb-7 inline-flex items-center gap-2 rounded-md p-0 text-xs font-semibold text-text-muted transition-colors duration-fast hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+            <ArrowLeft className="h-4 w-4 shrink-0" color="var(--muted-icon-hex)" />
+            Back to sign in
+          </Link>
+          <header>
+            <span className="mb-5 grid h-11 w-11 place-items-center rounded-lg border border-border-strong bg-muted">
+              <LockKeyhole className="h-5 w-5 shrink-0" color="var(--accent-primary-hex)" />
+            </span>
+            <h1 className="font-display text-[2rem] font-semibold leading-tight tracking-heading text-text-primary">Password reset unavailable</h1>
+            <p className="mt-2 text-sm leading-6 text-text-secondary">Password reset is currently unavailable in this demo deployment. Contact the app owner if you need help.</p>
+          </header>
+        </motion.div>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell mode="login">

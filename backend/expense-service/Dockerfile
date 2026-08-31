@@ -9,6 +9,7 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/expense-service-1.0.0.jar app.jar
-RUN apk add --no-cache curl
+COPY docker-entrypoint.sh .
+RUN apk add --no-cache curl && chmod +x docker-entrypoint.sh
 EXPOSE 8082
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/app/docker-entrypoint.sh"]

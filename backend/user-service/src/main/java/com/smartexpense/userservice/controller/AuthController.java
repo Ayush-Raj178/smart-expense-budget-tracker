@@ -9,6 +9,7 @@ import com.smartexpense.userservice.dto.PasswordResetRequest;
 import com.smartexpense.userservice.dto.SignupRequest;
 import com.smartexpense.userservice.dto.MessageResponse;
 import com.smartexpense.userservice.service.AccountVerificationService;
+import com.smartexpense.userservice.config.OtpVerificationSettings;
 import com.smartexpense.userservice.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,14 @@ public class AuthController {
 
     private final UserService userService;
     private final AccountVerificationService accountVerificationService;
+    private final OtpVerificationSettings otpVerificationSettings;
 
     @PostMapping("/signup")
-    public ResponseEntity<OtpDispatchResponse> signup(@Valid @RequestBody SignupRequest request) {
+    public ResponseEntity<?> signup(@Valid @RequestBody SignupRequest request) {
+        if (!otpVerificationSettings.isEnabled()) {
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(accountVerificationService.signupWithoutOtp(request));
+        }
         OtpDispatchResponse response = accountVerificationService.requestSignupOtp(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }

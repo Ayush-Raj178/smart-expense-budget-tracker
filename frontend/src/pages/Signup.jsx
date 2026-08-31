@@ -6,6 +6,7 @@ import AuthShell from '@/components/AuthShell';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
+import { useFeatureFlags } from '@/context/FeatureFlagsContext';
 import { authService } from '@/services/authService';
 
 const getApiMessage = (error, fallback) => error.response?.data?.message || fallback;
@@ -23,6 +24,7 @@ const Signup = () => {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const { login } = useAuth();
+  const { otpVerificationEnabled, loading: featureFlagsLoading } = useFeatureFlags();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -42,6 +44,11 @@ const Signup = () => {
     setLoading(true);
     try {
       const response = await authService.signup(name, email, password);
+      if (response.token) {
+        login(response.token, response.user);
+        navigate('/dashboard');
+        return;
+      }
       setEmail(response.email || email.trim().toLowerCase());
       setCooldown(response.resendAvailableInSeconds || 60);
       setStatus('We sent a 6-digit verification code to your email.');
@@ -112,7 +119,7 @@ const Signup = () => {
                 <span className="text-xs leading-5 text-text-secondary">I agree to the <Link to="/terms" className="font-semibold text-primary hover:text-primary-hover">Terms of Service</Link> and <Link to="/privacy" className="font-semibold text-primary hover:text-primary-hover">Privacy Policy</Link>.</span>
               </label>
               <AnimatePresence initial={false}>{error ? <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} role="alert" className="rounded-md border border-error/35 bg-error/10 px-3 py-2.5 text-sm text-error">{error}</motion.div> : null}</AnimatePresence>
-              <Button type="submit" disabled={loading} className="h-11 w-full bg-primary font-semibold text-text-on-accent hover:bg-primary-hover">{loading ? 'Sending verification code…' : 'Continue with email'}</Button>
+              <Button type="submit" disabled={loading || featureFlagsLoading} className="h-11 w-full bg-primary font-semibold text-text-on-accent hover:bg-primary-hover">{featureFlagsLoading ? 'Checking account options…' : loading ? (otpVerificationEnabled ? 'Sending verification code…' : 'Creating account…') : otpVerificationEnabled ? 'Continue with email' : 'Create account'}</Button>
             </form>
             <p className="mt-6 text-center text-sm text-text-secondary">Already have an account?{' '}<Link to="/login" className="font-semibold text-primary hover:text-primary-hover hover:underline">Sign in</Link></p>
           </motion.div>

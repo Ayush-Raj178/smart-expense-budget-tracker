@@ -1,20 +1,19 @@
 import axiosInstance from '../utils/axios';
-
-const API_BASE_URL = '/api';
+import { NOTIFICATION_API_BASE_URL } from '@/config/api';
 
 export const notificationService = {
   async getNotifications(config = {}) {
-    const response = await axiosInstance.get(`${API_BASE_URL}/notifications`, config);
+    const response = await axiosInstance.get(`${NOTIFICATION_API_BASE_URL}/notifications`, config);
     return response.data;
   },
 
   async markAsRead(id) {
-    const response = await axiosInstance.put(`${API_BASE_URL}/notifications/${id}/read`, {});
+    const response = await axiosInstance.put(`${NOTIFICATION_API_BASE_URL}/notifications/${id}/read`, {});
     return response.data;
   },
 
   async deleteNotification(id) {
-    const response = await axiosInstance.delete(`${API_BASE_URL}/notifications/${id}`);
+    const response = await axiosInstance.delete(`${NOTIFICATION_API_BASE_URL}/notifications/${id}`);
     return response.data;
   },
 };
