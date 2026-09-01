@@ -1,13 +1,13 @@
 # Smart Expense & Budget Tracker — Project Context
 
-> **Last code-verified:** 2026-08-23
+> **Last code-verified:** 2026-09-01
 > **Purpose:** Current, code-backed handoff for a developer or AI assistant joining the project with no chat history. Read this file first, then the specifications in [`docs/`](./).
 
 ---
 
 ## 1. Project Snapshot
 
-Smart Expense & Budget Tracker (SmartBudget) is a full-stack personal-finance application. A user can create an account with email OTP verification, record expenses, create monthly category budgets, track spending, receive threshold notifications, recover a password, and edit profile details.
+Smart Expense & Budget Tracker (SmartBudget) is a full-stack personal-finance application. A user can create an account, record expenses, create monthly category budgets, track spending, receive threshold notifications, recover a password, and edit profile details. Email OTP verification, password recovery, and verified email changes are fully functional locally; the public demo currently disables OTP-dependent behavior because free-hosting SMTP ports are restricted.
 
 The application currently consists of:
 
@@ -16,7 +16,9 @@ The application currently consists of:
 - Kafka event flow from expense changes to budget calculation to notifications.
 - JWT authentication shared by all backend services.
 - Docker Compose for MySQL, Kafka, and all four backend services.
-- Kubernetes manifests for the backend infrastructure and services, but no current frontend workload or CI/CD workflow.
+- GitHub Actions CI for all four backend services plus frontend lint/build checks.
+- A public deployment: Vercel for the frontend, Railway for all four backend services, and Aiven for MySQL and Kafka.
+- Legacy Kubernetes manifests for the backend infrastructure and services; these are not the live deployment path.
 
 ### Runtime architecture
 
@@ -35,9 +37,13 @@ expense-service
               └── budget-exceeded (Kafka; BudgetExceeded)
                     └── notification-service
                           └── persists notification
+
+budget-service
+  └── GET expense-service /api/expenses/summary
+        └── backfills currentSpent when a new budget is created
 ```
 
-There is no synchronous service-to-service HTTP call in the primary business flow. The frontend calls each REST service directly through Vite development proxies; backend propagation is asynchronous through Kafka.
+Normal expense-to-budget-to-notification propagation remains asynchronous through Kafka. The one synchronous service-to-service call is the authenticated budget-creation backfill from budget-service to expense-service. Locally, the frontend uses Vite development proxies; the Vercel build calls the four public Railway service origins configured through `VITE_*_SERVICE_URL` variables.
 
 ---
 
@@ -53,8 +59,9 @@ There is no synchronous service-to-service HTTP call in the primary business flo
 | Messaging | Confluent Kafka image `confluentinc/cp-kafka:7.7.1`, KRaft mode |
 | Testing | JUnit 5, Mockito, Spring test utilities; opt-in live SMTP/account-flow tests |
 | Local infrastructure | Dockerfiles per backend service and root Docker Compose |
-| Deployment assets | Kubernetes manifests for MySQL, Kafka, ingress, and four backend services |
-| CI/CD | Not implemented; no GitHub Actions workflow is present |
+| Cloud deployment | Vercel frontend; four Railway backend services; Aiven MySQL and Kafka |
+| Deployment assets | Per-service Dockerfiles/startup scripts, Vercel configuration, and legacy Kubernetes manifests |
+| CI/CD | GitHub Actions workflow at `.github/workflows/ci.yml`; Vercel/Railway deployment is managed outside that workflow |
 
 ---
 
@@ -64,29 +71,32 @@ There is no synchronous service-to-service HTTP call in the primary business flo
 
 | Component | Status | What is present |
 |---|---|---|
-| Frontend | **Built and redesigned** | Protected application shell, all product pages, auth/recovery/legal routes, both themes, responsive behavior |
-| user-service | **Built** | OTP signup, login/JWT, forgot-password flow, profile editing, email-change OTP |
-| expense-service | **Built** | Authenticated expense CRUD, filters, Kafka event publishing |
-| budget-service | **Built with known accounting gaps** | Monthly category budgets, additive create behavior, expense-event consumer, threshold-event producer |
-| notification-service | **Built** | Budget event consumer, persisted notifications, list/read/delete APIs |
+| Frontend | **Built, redesigned, and live** | Protected application shell, all product pages, auth/recovery/legal routes, both themes, responsive behavior; deployed on Vercel |
+| user-service | **Built and live** | Configurable OTP signup, login/JWT, forgot-password flow, profile editing, email-change OTP; deployed on Railway |
+| expense-service | **Built and live** | Authenticated expense CRUD, filters, summary endpoint, Kafka event publishing; deployed on Railway |
+| budget-service | **Built and live** | Monthly category budgets, existing-expense backfill, additive create behavior, cross-category/month expense corrections, threshold-event producer; deployed on Railway |
+| notification-service | **Built and live** | Budget event consumer, persisted notifications, list/read/delete APIs; deployed on Railway |
 | Kafka reliability layer | **Built, consumer retry policy incomplete** | Transactional producer outboxes, idempotent consumers, poison-pill handling, DLT routing; consumer-side transient retries remain effectively zero |
 | Docker Compose | **Built** | MySQL, Kafka, and four healthy backend service definitions; frontend is run separately |
 | Kubernetes | **Manifests present, not current production-ready** | Backend/infra manifests exist; frontend and newer SMTP configuration are absent |
 | Automated backend tests | **Present** | Unit/service tests in all services plus opt-in user-service live flows |
 | Automated frontend tests | **Not present** | No application-owned `.test`/`.spec` suite found |
-| CI/CD | **Not started** | No workflow found |
+| Public cloud deployment | **Live** | Vercel frontend, four Railway services, and Aiven MySQL/Kafka |
+| CI/CD | **Implemented** | GitHub Actions tests all four backend services and lints/builds the frontend on pushes to `main` and pull requests targeting `main`; deployment is managed by Vercel/Railway outside the workflow |
 
 ### Implemented end-to-end behavior
 
-- Email-verified signup creates the account only after a valid OTP.
+- With OTP verification enabled, signup creates the account only after a valid emailed OTP; with the flag disabled in the live demo, signup creates the account directly.
 - Existing users continue to log in with email/password and receive a JWT.
 - Expenses and budgets support create, read, edit, and delete operations.
+- A newly created budget synchronously backfills `currentSpent` from existing expenses in the same category/month.
+- Expense category or month edits reverse spending from the old budget bucket and apply it to the new bucket.
 - Expense events update budget spending and a first crossing of the configured threshold publishes a notification event.
 - Notifications refresh without a page reload through 30-second polling plus focus/visibility refresh.
-- Password recovery verifies an emailed OTP before allowing a new password to be submitted.
-- Profile name and phone save directly; email changes only after OTP verification at the new address.
+- With OTP enabled, password recovery verifies an emailed OTP before allowing a new password to be submitted; the live demo disables recovery.
+- Profile name and phone save directly; with OTP enabled, email changes only after verification at the new address. Live-demo email changes are disabled.
 
-This repository is feature-complete for the current product scope, but it is **not production-ready** because of the open consistency, security, deployment, and observability issues in §12.
+This repository is feature-complete for the current product scope and publicly deployed. It is a live demo rather than a production-hardened system because of the open reliability, security, observability, and free-tier constraints in §12.
 
 ---
 
@@ -94,6 +104,7 @@ This repository is feature-complete for the current product scope, but it is **n
 
 ```text
 smart-expense-budget-tracker/
+├── .github/workflows/ci.yml
 ├── backend/
 │   ├── user-service/
 │   ├── expense-service/
@@ -106,6 +117,7 @@ smart-expense-budget-tracker/
 │   │   ├── pages/
 │   │   ├── services/
 │   │   └── utils/
+│   ├── vercel.json
 │   ├── tailwind.config.js
 │   └── vite.config.js
 ├── infra/
@@ -138,11 +150,12 @@ Generated `target/`, `dist/`, and dependency directories are not source-of-truth
 | `/budgets` | JWT required | Budgets |
 | `/notifications` | JWT required | Notifications |
 
-`ThemeProvider` and `AuthProvider` wrap the router. `NotificationProvider` lives inside the application tree and reads authenticated state before fetching.
+`ThemeProvider`, `AuthProvider`, and `FeatureFlagsProvider` wrap the router. `NotificationProvider` lives inside the application tree and reads authenticated state before fetching.
 
 Important shared behavior:
 
 - JWT/user data are managed by `AuthContext` and attached to API requests.
+- `FeatureFlagsContext` reads `/api/public/config`; if the request fails it retains OTP verification as the safer default.
 - A `401` response clears the local session and returns the user to login.
 - Theme selection is class-based, saved as `smartbudget_theme` in local storage, and available from the profile menu.
 - The old inert global search/Command-K control was removed. Search is local to Expenses and Budgets and filters already-loaded data client-side.
@@ -217,7 +230,7 @@ The original Graphite dark material values (`#17181C` canvas, `#1E2025` surface,
 - Individual budgets are cards in a responsive grid with reduced-motion-aware `TiltCard` depth.
 - Each card shows spent, remaining, limit, percentage, and a precise progress marker for high utilization.
 - Progress states are cobalt below 70%, amber at 70–79%, and rose at 80% and above. The aggregate band is intentionally calmer than category-level alerts.
-- `POST /api/budgets` is additive for an existing `(userId, category, month)`: the submitted amount increments `monthlyLimit`; `currentSpent` is unchanged.
+- `POST /api/budgets` backfills existing matching expenses on first creation. For an existing `(userId, category, month)`, it is additive: the submitted amount increments `monthlyLimit`; `currentSpent` is unchanged.
 - Preset and optional custom category behavior matches Expenses.
 
 #### Authentication — “Quiet Financial Entry”
@@ -279,7 +292,21 @@ Email format validation requires a syntactically valid address with a dotted dom
 
 Spring Mail reads SMTP settings from environment-backed properties and enables authenticated STARTTLS. Synchronous send failures are converted to application errors for signup/email-change so the frontend stays on the entry step. Password-recovery delivery deliberately preserves anti-enumeration behavior.
 
+### OTP deployment feature flag
+
+`OTP_VERIFICATION_ENABLED` defaults to `true` in application configuration and Docker Compose, so the full signup, password-reset, and verified email-change flows remain functional locally. The user-service exposes the effective value through `GET /api/public/config`, and the frontend adapts its forms to that response.
+
+The Railway deployment sets the flag to `false` because the free hosting path does not permit the required SMTP ports. In that demo mode:
+
+- `POST /api/auth/signup` creates the user directly and returns the JWT/user response without an OTP step.
+- Password reset is shown as unavailable.
+- Profile name and phone remain editable, but email changes are disabled.
+
+This is a deployment limitation, not removal of the underlying OTP implementation.
+
 ### Signup flow
+
+The sequence below is the full flow used when `OTP_VERIFICATION_ENABLED=true`:
 
 1. `POST /api/auth/signup` validates name/email/password, checks uniqueness and MX, creates a hashed challenge, and sends the OTP. It returns `202`; no user exists yet.
 2. `POST /api/auth/signup/verify` validates expiry, attempts, and OTP; creates the user only after success; removes the challenge; and returns `201` with JWT/user data.
@@ -322,6 +349,7 @@ MAIL_FROM
 OTP_EXPIRY_MINUTES
 OTP_RESEND_COOLDOWN_SECONDS
 OTP_MAX_ATTEMPTS
+OTP_VERIFICATION_ENABLED
 ```
 
 ---
@@ -341,6 +369,7 @@ All business endpoints derive `userId` from the authenticated JWT; clients do no
 | POST | `/api/auth/forgot-password` | Start anti-enumerating reset flow |
 | POST | `/api/auth/forgot-password/verify` | Pre-validate reset OTP |
 | POST | `/api/auth/reset-password` | Validate OTP and persist new password |
+| GET | `/api/public/config` | Return public deployment feature flags |
 | GET | `/api/users/me` | Get profile |
 | PUT | `/api/users/me` | Update name/phone |
 | POST | `/api/users/me/email/request` | Send OTP to new email |
@@ -352,6 +381,7 @@ All business endpoints derive `userId` from the authenticated JWT; clients do no
 |---|---|---|
 | POST | `/api/expenses` | Create and publish `ExpenseAdded` |
 | GET | `/api/expenses` | List; optional category/startDate/endDate filters |
+| GET | `/api/expenses/summary` | Sum owned expenses for a category and `YYYY-MM` month (budget backfill) |
 | GET | `/api/expenses/{id}` | Get owned expense |
 | PUT | `/api/expenses/{id}` | Update and publish `ExpenseUpdated` |
 | DELETE | `/api/expenses/{id}` | Delete and publish `ExpenseDeleted` |
@@ -367,7 +397,7 @@ All business endpoints derive `userId` from the authenticated JWT; clients do no
 | PUT | `/api/budgets/{id}` | Replace editable budget values |
 | DELETE | `/api/budgets/{id}` | Delete owned budget |
 
-The database constraint/repository identity is one budget per `(userId, category, month)`. Repeating POST for that identity increments `monthlyLimit` and preserves `currentSpent`.
+The database constraint/repository identity is one budget per `(userId, category, month)`. On first creation, budget-service calls the authenticated expense summary endpoint and initializes `currentSpent` from matching existing expenses. Repeating POST for that identity increments `monthlyLimit` and preserves `currentSpent`.
 
 ### notification-service — port 8084, `sebt_notification_db`
 
@@ -457,7 +487,7 @@ The current `DefaultErrorHandler` uses `FixedBackOff(0, 0)`, so even retryable/t
 
 ## 9. Databases
 
-One MySQL 8 container hosts four schemas created by `infra/mysql/init`:
+Locally, one MySQL 8 container hosts four schemas created by `infra/mysql/init`. The live deployment uses Aiven MySQL with the same service-owned schema boundaries:
 
 | Service | Schema | Principal tables |
 |---|---|---|
@@ -466,11 +496,30 @@ One MySQL 8 container hosts four schemas created by `infra/mysql/init`:
 | budget-service | `sebt_budget_db` | `budgets`, `processed_events`, `outbox_events` |
 | notification-service | `sebt_notification_db` | `notifications`, `processed_events` |
 
-JPA is currently configured to update schemas at startup. Services do not access one another’s schemas in application code. Docker Compose nevertheless gives every service the same MySQL root credentials; least-privilege service users and managed migrations are still needed.
+JPA is currently configured to update schemas at startup. Services do not access one another’s schemas in application code. Docker Compose nevertheless gives every service the same MySQL root credentials; least-privilege service users and managed migrations are still needed. Live database credentials remain platform secrets and are not stored in the repository.
 
 ---
 
 ## 10. Local Development and Deployment
+
+### Public cloud deployment (live)
+
+- Source: public GitHub repository at [Ayush-Raj178/smart-expense-budget-tracker](https://github.com/Ayush-Raj178/smart-expense-budget-tracker).
+- Frontend: Vercel at [smart-expense-budget-tracker-lake.vercel.app](https://smart-expense-budget-tracker-lake.vercel.app).
+- Backend: all four Spring Boot services run on Railway.
+- Data and messaging: Aiven hosts MySQL and Kafka on its free tier.
+
+Railway is the actual backend host. Render was evaluated first but was not used because it required card verification even for the free tier. The tracked `docs/DEPLOYMENT.md` and `frontend/.env.example` still describe that abandoned Render plan and must not be treated as the current production runbook until they are rewritten for Railway.
+
+GitHub Actions runs repository checks; deployment is managed outside that workflow by Vercel and Railway. Vercel receives the four public Railway origins through `VITE_USER_SERVICE_URL`, `VITE_EXPENSE_SERVICE_URL`, `VITE_BUDGET_SERVICE_URL`, and `VITE_NOTIFICATION_SERVICE_URL`; the Railway services allow the Vercel origin through CORS configuration.
+
+### Production-specific configuration
+
+- Railway user-service sets `OTP_VERIFICATION_ENABLED=false`; local Docker Compose defaults it to `true`.
+- Docker Compose keeps budget-service's expense-client timeouts at `EXPENSE_SERVICE_CONNECT_TIMEOUT_MS=500` and `EXPENSE_SERVICE_READ_TIMEOUT_MS=1000`, appropriate for the local Docker network.
+- Railway uses `EXPENSE_SERVICE_CONNECT_TIMEOUT_MS=3000` and `EXPENSE_SERVICE_READ_TIMEOUT_MS=5000` because its budget-to-expense backfill call crosses public service origins.
+
+The original 500 ms/1000 ms values were tuned for the local network. Public-internet latency between Railway services exceeded them, so the backfill request exhausted its two attempts and followed the client's fallback path, creating the budget with `currentSpent=0`. Increasing the production values to 3000 ms/5000 ms resolved the observed deployment failure. Keep local and cloud latency profiles separate when tuning cross-service clients.
 
 ### Docker Compose
 
@@ -532,6 +581,18 @@ Treat Kubernetes as an existing deployment starting point, not a verified curren
 
 ## 11. Tests and Verification
 
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on pushes to `main` and pull requests targeting `main`:
+
+- A four-entry backend matrix runs `mvn test` independently for user-service, expense-service, budget-service, and notification-service on Java 17.
+- The frontend job installs dependencies with Node.js 22, then runs `npm run lint` and `npm run build`.
+- `MAIL_SMOKE_TEST` and `LIVE_ACCOUNT_FLOW_TEST` are explicitly set to `false`. Their JUnit environment-variable conditions therefore skip those live-only tests in CI while retaining them for opt-in local/integration verification.
+
+The workflow is a build/test quality gate; production deployment is managed by Vercel and Railway rather than deploy steps inside the workflow.
+
+Local verification on 2026-09-01 matched those gates: user-service ran 31 tests with the two live-only tests skipped, expense-service passed 15 tests, budget-service passed 22 tests, notification-service passed 9 tests, and frontend lint/build completed successfully (with existing non-blocking lint warnings).
+
 ### Test coverage present in source
 
 - user-service: `UserServiceTest`, `AccountVerificationServiceTest`, `EmailDomainValidationServiceTest`.
@@ -542,6 +603,8 @@ Treat Kubernetes as an existing deployment starting point, not a verified curren
 - `LiveAccountFlowTest` runs only when `LIVE_ACCOUNT_FLOW_TEST=true`; it exercises signup, cooldown, login, profile update, email change, password reset, database hash verification, direct login, OTP reuse rejection, and anti-enumeration against running infrastructure.
 
 Opt-in mail/live tests require real local secrets and must never print or commit them. The regular test suite does not prove live Gmail delivery.
+
+`BudgetServiceTest` includes backfill behavior and same-bucket, cross-category, cross-month, and combined category/month expense-update cases. The expense-service producer captures old/new amount, category, and date in `ExpenseUpdatedEvent`, which is the contract those corrections require.
 
 There are no project-owned frontend unit/component/end-to-end tests. Visual and interaction regressions are currently verified manually in the browser.
 
@@ -559,15 +622,14 @@ the `PUBLISHED` transition, and failed publication remaining eligible for retry.
 
 | Priority | Issue | Verified current behavior / impact | Required direction |
 |---|---|---|---|
-| P0 | Expense category/month edits corrupt budget totals | `ExpenseUpdated` carries old/new amount but only the **new** category/date. budget-service applies the amount delta to the new bucket and cannot reverse the old bucket. Amount-only edits within the same bucket work. | Include old category/month in the event (or emit compensating events) and transactionally update both affected budgets; add cross-category/month tests. |
-| P1 | New budgets do not backfill existing expenses | A newly created budget starts `currentSpent` at zero and only future expense events alter it. Existing expenses in that category/month are not reconciled. | Add a backfill/reconciliation contract without cross-reading another service’s DB (API, event history, or projection). |
+| P1 | Budget backfill still fails open to zero | `ExpenseSummaryClient` retries once, then logs a warning and returns zero if expense-service remains unavailable or too slow. Production timeout tuning fixed the observed Railway latency failure, but a longer outage can still create an understated budget. | Make failure explicit or persist/retry reconciliation state instead of treating transport failure as a valid zero total. |
 | P1 | Kafka retry is effectively zero | `FixedBackOff(0, 0)` immediately routes handler failures to DLT, including transient database/service failures. | Add bounded exponential/fixed retries for retryable exceptions; keep poison pills non-retryable. |
 | P1 | No DLT operations path | Records reach `.DLT`, but there is no alerting, dashboard, replay tool, or application consumer. | Add monitoring and an authenticated replay/runbook process. |
 | P1 | Auth endpoints lack general abuse controls | OTP challenges have cooldown and attempt limits, but login and public auth initiation have no IP/account-wide rate limiter. | Add gateway/service rate limiting, progressive login throttling, audit metrics, and safe client feedback. |
 | P1 | Password reset does not revoke existing JWTs | Stateless tokens issued before a password reset remain valid until expiry; email change likewise has no global revocation/version check. | Add token version/session revocation and increment it on sensitive account changes. |
-| P1 | All services use one MySQL root user | Compose defaults every service to root on the same MySQL instance. A compromised service can access every schema. | Create one least-privilege DB user per schema; move secrets out of Compose defaults. |
-| P1 | Kubernetes lags current auth/mail configuration | SMTP/OTP environment variables and a frontend workload are absent. | Bring manifests to parity or replace them with a maintained deployment path. |
+| P1 | Local services use one MySQL root user | Compose defaults every service to root on the same MySQL instance. A compromised service can access every schema. | Create one least-privilege DB user per schema; move secrets out of Compose defaults. |
 | P2 | Dev republish endpoint is enabled in Compose | `ADMIN_REPUBLISH_EVENTS_ENABLED=true` exposes an authenticated event-republish helper to any signed-in user; there is no admin role. | Default it off and restrict it to a dedicated development profile/admin authorization. |
+| P2 | Legacy deployment assets are stale | Kubernetes lacks the frontend and current OTP configuration, while `docs/DEPLOYMENT.md` and `frontend/.env.example` still target the abandoned Render plan. The live path is Vercel + Railway + Aiven. | Rewrite the deployment runbook for Railway and either update or clearly archive the Kubernetes path. |
 | P2 | MX validation cannot prove mailbox existence | A real mail domain can accept an address syntactically even when that mailbox does not exist; asynchronous bounces cannot be guaranteed in the request cycle. | Keep error wording honest; consider a reputable verification API only if product requirements justify the privacy/cost tradeoff. |
 | P2 | Phone ownership is unverified | Phone updates are direct and no SMS challenge exists. | Add SMS verification if phone is ever used for recovery, trust, or alerts. |
 | P2 | No frontend automated regression suite | Complex theme, form, modal, filter, polling, and responsive behavior relies on manual QA. | Add component tests and browser E2E coverage for core flows/themes. |
@@ -584,6 +646,17 @@ the `PUBLISHED` transition, and failed publication remaining eligible for retry.
 | Notification fetch ran on Login/Signup and caused 401s | `NotificationContext` waits for auth loading and fetches only when a valid authenticated token exists. |
 | Duplicate category/month POST replaced the old limit | Current business rule is additive; POST increases `monthlyLimit` and does not alter `currentSpent`. |
 | Password-reset success did not reliably prove login | Reset uses the same BCrypt encoder, `saveAndFlush`, revalidation, and one-time challenge deletion; the opt-in live test checks stored hash change and direct login. |
+| Expense category/month edits corrupted budget totals | `ExpenseUpdated` now includes old/new amount, category, and date. budget-service reverses the old bucket and applies the new bucket, with same-bucket, cross-category, cross-month, and combined tests. |
+| New budgets ignored existing expenses | First creation calls expense-service's authenticated summary endpoint and initializes `currentSpent` from the existing category/month total. |
+| Repository had no automated CI | GitHub Actions now tests all four backend services and lints/builds the frontend on pushes/PRs for `main`, while correctly skipping opt-in live mail/account tests. |
+| No public cloud deployment | The public GitHub repository now feeds a live Vercel frontend, four Railway backends, and Aiven MySQL/Kafka. |
+
+### Deployment-specific findings and constraints
+
+- **SMTP on free hosting:** Railway production uses `OTP_VERIFICATION_ENABLED=false`, so the public demo supports direct signup but not password reset or email changes. Local Docker Compose defaults to the complete OTP flow with the flag set to `true`.
+- **Cross-service latency:** public-internet calls between Railway services need a different timeout budget than Docker-network calls. The observed working split is 3000 ms connect/5000 ms read in production versus 500 ms/1000 ms locally.
+- **Backfill observability:** the timeout change fixed the observed zero-backfill symptom, but the client still only logs its final failure before returning zero. There is no metric or user-visible indication that reconciliation was skipped.
+- **Platform documentation drift:** Render is not part of the live architecture. Any remaining Render references are historical setup material until rewritten for Railway.
 
 ---
 
