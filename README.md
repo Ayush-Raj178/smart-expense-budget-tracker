@@ -7,6 +7,17 @@ A full-stack personal-finance platform built around event-driven Spring Boot mic
 
 **Live application:** [https://smart-expense-budget-tracker-lake.vercel.app](https://smart-expense-budget-tracker-lake.vercel.app)
 
+## Demo access
+
+Use this public demo account to explore the deployed application without signing up:
+
+- **Email:** `demo@smartbudget.dev`
+- **Password:** `SmartBudgetDemo!2026`
+
+Pre-populated with sample expenses, budgets, and notifications so you can explore without entering your own data.
+
+Want to test the full signup flow with OTP email verification? Clone the repository and run it locally via Docker Compose — see [Run locally](#run-locally) below. The shared production account keeps the hosted demo immediately accessible; the complete email-verification workflow remains implemented and testable locally.
+
 SmartBudget supports authenticated expense tracking, monthly category budgets, spending projections, threshold notifications, password recovery, and profile management. It is designed as an engineering portfolio project: the service boundaries, failure handling, deployment tradeoffs, and consistency model are as important as the user-facing features.
 
 ## What this project demonstrates
